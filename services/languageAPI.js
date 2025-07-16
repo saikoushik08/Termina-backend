@@ -21,24 +21,25 @@ Given a word: "${word}", return:
 Do NOT include markdown, explanation, or extra text.
 `;
 
-
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
 
-    // Optional: log raw Gemini response (for debugging in development)
-    // console.log('🔎 Gemini raw response:', text);
+    // ✅ LOG FULL RAW RESPONSE FROM GEMINI
+    console.log(`🔎 Gemini raw response for "${word}":\n`, text);
 
-    // Extract JSON safely from the Gemini response
+    // Try to extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*?\}/);
+
     if (!jsonMatch) {
+      console.error('⚠️ No valid JSON object found in response!');
       throw new Error('No valid JSON found in Gemini response');
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
 
-    // Optional validation
     if (!parsed.meaning || !parsed.synonyms) {
+      console.warn('⚠️ Parsed JSON is missing fields:', parsed);
       throw new Error('Incomplete JSON structure');
     }
 
@@ -47,7 +48,7 @@ Do NOT include markdown, explanation, or extra text.
       synonyms: parsed.synonyms.trim()
     };
   } catch (err) {
-    console.error('❌ Failed to get or parse Gemini response:', err.message);
+    console.error('❌ Gemini API or parsing error:', err.message);
     return {
       meaning: 'Could not fetch meaning at the moment.',
       synonyms: 'Could not fetch synonyms at the moment.'
