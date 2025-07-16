@@ -1,3 +1,18 @@
-# backend/.gitignore
-node_modules/
+# Ignore environment variables
 .env
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Vercel output (if using local builds)
+.vercel/
