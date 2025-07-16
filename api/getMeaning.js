@@ -2,7 +2,7 @@
 
 const { getMeaningFromGemini } = require('../services/languageAPI');
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { word } = req.query;
 
   if (!word || typeof word !== 'string') {
@@ -21,3 +21,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
+module.exports = handler;
