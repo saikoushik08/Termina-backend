@@ -2,8 +2,8 @@
   "name": "word-helper-backend",
   "version": "1.0.0",
   "description": "Serverless backend for Word Helper Chrome Extension using Gemini AI",
-  "main": "api/getMeaning.js",
   "scripts": {
+    "start": "node api/getMeaning.js",
     "dev": "vercel dev"
   },
   "keywords": [
@@ -16,7 +16,8 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "@google/generative-ai": "^0.5.0",
-    "dotenv": "^16.0.3"
+    "@google/generative-ai": "0.5.0",
+    "dotenv": "16.0.3",
+    "node-fetch": "2.6.7"
   }
 }
