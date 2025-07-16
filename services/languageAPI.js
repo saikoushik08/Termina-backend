@@ -4,14 +4,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// ⚠️ Correct model path and usage
 const model = genAI.getGenerativeModel({ model: 'models/gemini-pro' });
 
-
-/**
- * Generates meaning and synonyms for a given word using Google Gemini.
- * @param {string} word
- * @returns {Promise<{meaning: string, synonyms: string}>}
- */
 async function getMeaningFromGemini(word) {
   const prompt = `
 Only respond with a valid JSON object.
@@ -23,40 +19,27 @@ Do NOT include markdown, explanation, or extra text.
 `;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text: prompt }], role: 'user' }],
+    });
+
     const text = result.response.text().trim();
-
-    // ✅ LOG FULL RAW RESPONSE FROM GEMINI
-    console.log(`🔎 Gemini raw response for "${word}":\n`, text);
-
-    // Try to extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*?\}/);
-
-    if (!jsonMatch) {
-      console.error('⚠️ No valid JSON object found in response!');
-      throw new Error('No valid JSON found in Gemini response');
-    }
+    if (!jsonMatch) throw new Error('No valid JSON found');
 
     const parsed = JSON.parse(jsonMatch[0]);
 
-    if (!parsed.meaning || !parsed.synonyms) {
-      console.warn('⚠️ Parsed JSON is missing fields:', parsed);
-      throw new Error('Incomplete JSON structure');
-    }
-
     return {
-      meaning: parsed.meaning.trim(),
-      synonyms: parsed.synonyms.trim()
+      meaning: parsed.meaning?.trim() || 'Meaning not found.',
+      synonyms: parsed.synonyms?.trim() || 'Synonyms not found.',
     };
   } catch (err) {
     console.error('❌ Gemini API or parsing error:', err.message);
     return {
       meaning: 'Could not fetch meaning at the moment.',
-      synonyms: 'Could not fetch synonyms at the moment.'
+      synonyms: 'Could not fetch synonyms at the moment.',
     };
   }
 }
 
-module.exports = {
-  getMeaningFromGemini
-};
+module.exports = { getMeaningFromGemini };
