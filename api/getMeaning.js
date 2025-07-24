@@ -21,15 +21,18 @@ async function handler(req, res) {
   }
 
   try {
-    const { meaning, synonyms } = await getMeaningFromGemini(trimmedWord);
-    res.status(200).json({ meaning, synonyms });
+    const { meaning, synonyms, source } = await getMeaningFromGemini(trimmedWord);
+
+    console.log(`✅ Meaning and synonyms fetched from "${source}" for word: "${trimmedWord}"`);
+
+    res.status(200).json({ meaning, synonyms, source }); // Send source in response
   } catch (error) {
-    console.error(`Error in /api/getMeaning for word "${trimmedWord}":`, error.message, error.stack);
+    console.error(`❌ Error in /api/getMeaning for word "${trimmedWord}":`, error.message, error.stack);
     res.status(500).json({
       error: 'Failed to fetch meaning and synonyms',
-      // Keep these if your frontend expects them; otherwise, remove for simplicity
       meaning: 'Unable to fetch meaning at the moment.',
       synonyms: 'Unable to fetch synonyms at the moment.',
+      source: 'none'
     });
   }
 }
