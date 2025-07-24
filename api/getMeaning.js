@@ -1,10 +1,7 @@
-// backend/api/getMeaning.js
-
 const supabase = require('../services/supabaseClient');
 const { getMeaningFromGemini } = require('../services/languageAPI');
 
 async function handler(req, res) {
-  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -42,7 +39,7 @@ async function handler(req, res) {
       console.log(`🔁 Cache hit for "${trimmedWord}" from source: ${cachedData.source}`);
       return res.status(200).json({
         meaning: cachedData.meaning,
-        synonyms: cachedData.synonyms.join(', '),
+        synonyms: Array.isArray(cachedData.synonyms) ? cachedData.synonyms.join(', ') : cachedData.synonyms,
         source: cachedData.source,
       });
     }
@@ -50,7 +47,6 @@ async function handler(req, res) {
     // 2. Not in cache → fetch from Gemini or fallback
     const result = await getMeaningFromGemini(trimmedWord);
 
-    // Validate response
     if (!result || !result.meaning || !result.synonyms) {
       console.error(`❌ Invalid response from getMeaningFromGemini for word "${trimmedWord}"`, result);
       return res.status(500).json({
@@ -63,18 +59,25 @@ async function handler(req, res) {
 
     const { meaning, synonyms, source } = result;
 
+    // Prepare synonyms array safely
+    const synonymsArray = synonyms
+      ? synonyms.split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+
     // 3. Save to Supabase
     const { error: insertError } = await supabase.from('words').insert([
       {
         word: trimmedWord,
         meaning,
-        synonyms: synonyms.split(',').map((s) => s.trim()),
+        synonyms: synonymsArray,
         source,
       },
     ]);
 
     if (insertError) {
-      console.error('Supabase insert error:', insertError);
+      console.error(`❌ Supabase insert error for "${trimmedWord}":`, insertError);
+    } else {
+      console.log(`✅ Inserted "${trimmedWord}" into Supabase.`);
     }
 
     // 4. Return response
