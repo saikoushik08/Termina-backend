@@ -5,7 +5,7 @@ const { getMeaningFromGemini } = require('../services/languageAPI');
 
 async function handler(req, res) {
   // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Replace '*' with your extension's origin in production
+  res.setHeader('Access-Control-Allow-Origin', '*'); // In production, replace with specific origin
   res.setHeader('Access-Control-Allow-Methods', 'GET');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -28,7 +28,7 @@ async function handler(req, res) {
   }
 
   try {
-    // 1. Check if word exists in Supabase cache
+    // 1. Check Supabase cache first
     const { data: cachedData, error: fetchError } = await supabase
       .from('words')
       .select('meaning, synonyms, source')
@@ -36,46 +36,53 @@ async function handler(req, res) {
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') {
-      // Unexpected error (other than no rows found)
-      console.error('Supabase fetch error:', fetchError);
+      console.error('⚠️ Supabase fetch error:', fetchError);
     }
 
     if (cachedData) {
-      // Found in cache, return cached meaning + synonyms
       console.log(`🔁 Cache hit for "${trimmedWord}" from source: ${cachedData.source}`);
       return res.status(200).json({
         meaning: cachedData.meaning,
-        synonyms: cachedData.synonyms.join(', '),
+        synonyms: Array.isArray(cachedData.synonyms)
+          ? cachedData.synonyms.join(', ')
+          : '',
         source: cachedData.source,
       });
     }
 
-    // 2. Not found in cache → fetch from AI/dictionary APIs
+    // 2. If not in cache, fetch from Gemini or fallback APIs
     const { meaning, synonyms, source } = await getMeaningFromGemini(trimmedWord);
 
-    // 3. Save the new data to Supabase cache
-    const { error: insertError } = await supabase.from('words').insert([
-      {
-        word: trimmedWord,
-        meaning,
-        synonyms: synonyms.split(',').map((s) => s.trim()), // Store synonyms as text array
-        source,
-      },
-    ]);
-
-    if (insertError) {
-      console.error('Supabase insert error:', insertError);
+    if (!meaning || !synonyms) {
+      throw new Error('No meaning found');
     }
 
-    // 4. Return fresh result
-    console.log(`✅ Meaning and synonyms fetched from "${source}" for word: "${trimmedWord}"`);
+    // 3. Store in Supabase
+    const insertPayload = {
+      word: trimmedWord,
+      meaning,
+      synonyms: synonyms
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean), // clean & ensure non-empty
+      source,
+    };
+
+    const { error: insertError } = await supabase.from('words').insert([insertPayload]);
+
+    if (insertError) {
+      console.error('⚠️ Supabase insert error:', insertError);
+    }
+
+    // 4. Return response
+    console.log(`✅ Fetched from "${source}" and cached for "${trimmedWord}"`);
     return res.status(200).json({
       meaning,
       synonyms,
       source,
     });
   } catch (error) {
-    console.error(`❌ Error in /api/getMeaning for word "${trimmedWord}":`, error.message, error.stack);
+    console.error(`❌ Error in /api/getMeaning for word "${trimmedWord}":`, error.message);
     return res.status(500).json({
       error: 'Failed to fetch meaning and synonyms',
       meaning: 'Unable to fetch meaning at the moment.',
