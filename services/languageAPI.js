@@ -39,6 +39,13 @@ Do NOT include any explanation, markdown, or extra formatting.
     const result = await timeout(8000, model.generateContent(prompt));
     const text = result.response.text().trim();
 
+    // Detect rate limit in Gemini's response if possible
+    // This depends on the actual error format returned by Gemini API
+    // For example, if the API returns a 429 or an error message containing "limit"
+    if (/limit/i.test(text)) {
+      throw new Error('Gemini API usage limit exceeded');
+    }
+
     let parsed;
     try {
       parsed = JSON.parse(text);
@@ -65,9 +72,46 @@ Do NOT include any explanation, markdown, or extra formatting.
     return response;
   } catch (err) {
     console.error(`❌ Gemini API error for "${word}":`, err.message);
+
+    // If error is rate limit related, fall back immediately to Wordnik
+    if (/limit/i.test(err.message)) {
+      console.warn(`⚠️ Gemini limit hit, falling back to Wordnik for "${word}"`);
+
+      if (process.env.WORDNIK_API_KEY) {
+        try {
+          const meaningUrl = `https://api.wordnik.com/v4/word.json/${encodeURIComponent(
+            word
+          )}/definitions?limit=1&api_key=${process.env.WORDNIK_API_KEY}`;
+
+          const synonymsUrl = `https://api.wordnik.com/v4/word.json/${encodeURIComponent(
+            word
+          )}/relatedWords?relationshipTypes=synonym&limit=5&api_key=${process.env.WORDNIK_API_KEY}`;
+
+          const [meaningRes, synonymsRes] = await Promise.all([
+            fetch(meaningUrl),
+            fetch(synonymsUrl),
+          ]);
+
+          const meaningData = await meaningRes.json();
+          const synonymsData = await synonymsRes.json();
+
+          return {
+            source: 'wordnik',
+            meaning:
+              meaningData?.[0]?.text || 'Unable to fetch meaning at the moment.',
+            synonyms:
+              synonymsData?.[0]?.words?.join(', ') ||
+              'Unable to fetch synonyms at the moment.',
+          };
+        } catch (wordnikErr) {
+          console.error(`❌ Wordnik API error for "${word}":`, wordnikErr.message);
+          // If Wordnik also fails, continue to Free Dictionary fallback below
+        }
+      }
+    }
   }
 
-  // -------- Tier 2: Wordnik --------
+  // -------- Tier 2: Wordnik fallback (normal flow if Gemini errored but not limit) --------
   if (process.env.WORDNIK_API_KEY) {
     try {
       const meaningUrl = `https://api.wordnik.com/v4/word.json/${encodeURIComponent(
@@ -102,7 +146,7 @@ Do NOT include any explanation, markdown, or extra formatting.
     }
   }
 
-  // -------- Tier 3: Free Dictionary API --------
+  // -------- Tier 3: Free Dictionary API fallback --------
   try {
     const freeURL = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(
       word

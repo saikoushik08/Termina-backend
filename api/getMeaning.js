@@ -1,6 +1,31 @@
 const supabase = require('../services/supabaseClient');
 const { getMeaningFromGemini } = require('../services/languageAPI');
 
+function isInvalidText(text) {
+  if (!text) return true;
+  const lowered = text.toLowerCase().trim();
+  const failPhrases = [
+    'unable to fetch',
+    'not found',
+    'no meaning',
+    'no synonyms',
+    'error',
+    'undefined',
+    'null',
+  ];
+  return failPhrases.some((phrase) => lowered.includes(phrase));
+}
+
+function isValidWordData({ meaning, synonyms }) {
+  const meaningInvalid = isInvalidText(meaning);
+  const synonymsInvalid = isInvalidText(synonyms);
+
+  console.log('Validation check — Meaning invalid:', meaningInvalid, 'Synonyms invalid:', synonymsInvalid);
+
+  // Return false if both meaning and synonyms are invalid
+  return !(meaningInvalid && synonymsInvalid);
+}
+
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
@@ -64,20 +89,24 @@ async function handler(req, res) {
       ? synonyms.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
 
-    // 3. Save to Supabase
-    const { error: insertError } = await supabase.from('words').insert([
-      {
-        word: trimmedWord,
-        meaning,
-        synonyms: synonymsArray,
-        source,
-      },
-    ]);
+    // 3. Only save to Supabase if meaning and synonyms are valid
+    if (isValidWordData({ meaning, synonyms })) {
+      const { error: insertError } = await supabase.from('words').insert([
+        {
+          word: trimmedWord,
+          meaning,
+          synonyms: synonymsArray,
+          source,
+        },
+      ]);
 
-    if (insertError) {
-      console.error(`❌ Supabase insert error for "${trimmedWord}":`, insertError);
+      if (insertError) {
+        console.error(`❌ Supabase insert error for "${trimmedWord}":`, insertError);
+      } else {
+        console.log(`✅ Inserted "${trimmedWord}" into Supabase.`);
+      }
     } else {
-      console.log(`✅ Inserted "${trimmedWord}" into Supabase.`);
+      console.log(`⚠️ Skipped saving "${trimmedWord}" due to invalid meaning and synonyms.`);
     }
 
     // 4. Return response
